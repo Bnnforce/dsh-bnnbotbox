@@ -1,0 +1,74 @@
+{
+  "name": "dsh-bnnbotbox",
+  "version": "3.1.1",
+  "description": "QQ bot 人格与记忆一体化插件：四维情绪、生活联动、心跳主动开口、群记忆卡片、画像抽取。为 DeepSeek Harness 设计。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./persona": {
+      "default": "./lib/persona/index.js"
+    },
+    "./memory": {
+      "default": "./lib/memory/index.js"
+    },
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./shared/*": "./lib/shared/*.js"
+  },
+  "files": [
+    "lib/**/*.js",
+    "assets/**",
+    "cordis.patch.yml",
+    "README.md",
+    "PRIVACY.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "THIRD-PARTY-NOTICES.md"
+  ],
+  "scripts": {
+    "test": "node test/run-all.mjs",
+    "test:persona": "for f in test/persona/*.mjs; do node \"$f\" || exit 1; done",
+    "test:memory": "for f in test/memory/*.mjs; do node \"$f\" || exit 1; done",
+    "test:r4": "for f in test/r4/*.mjs; do node \"$f\" || exit 1; done",
+    "test:install": "node test/install/fresh-env.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "qqbot",
+    "persona",
+    "memory",
+    "cordis-plugin"
+  ],
+  "license": "MIT",
+  "author": "Bnnforce",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bnnforce/dsh-bnnbotbox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Bnnforce/dsh-bnnbotbox/issues"
+  },
+  "homepage": "https://github.com/Bnnforce/dsh-bnnbotbox#readme",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "manifestVersion": 1
+  }
+}

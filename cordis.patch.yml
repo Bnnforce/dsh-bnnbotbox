@@ -1,0 +1,21 @@
+# dsh-bnnbotbox —— Loader bundle patch
+#
+# 合并了两个原插件的配置声明：
+#   · dsh-anti-ai-persona（人格本体）
+#   · dsh-qq-memory（群记忆）
+#
+# ⚠️ 本包为单插件：persona 与 memory 是同一进程内的两个模块，
+#    不再有 `inject: ['persona']` 的时序依赖。
+#
+# 路径说明（开源规范：不写死绝对路径）：
+#   · qqbotDataRoot 留空 → 运行时按 ①配置 ②QQBOT_DATA_ROOT ③DSH_HOME ④向上探测 ⑤~/.dsh-qqbot 依次解析
+#   · dataRoot 留空 → 运行时按 ①配置 ②PERSONA_DATA_ROOT ③DSH_HOME/data/bnn-botbox 依次解析
+#                    （若存在旧目录 dsh-anti-ai-persona 会自动沿用，保证老数据不丢）
+- insert:
+    - id: bnnbotbox
+      name: 'dsh-bnnbotbox'
+      config:
+        enabled: true
+        # 留空 = 自动探测，不要在这里写死路径
+        qqbotDataRoot: ''
+        dataRoot: ''
