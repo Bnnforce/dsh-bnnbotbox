@@ -91,6 +91,43 @@ dsh plugin add /path/to/dsh-bnnbotbox
 
 ## 配置
 
+有两种方式，**优先用设置面板**：
+
+### 设置面板（推荐）
+
+DSH → 设置 → **BnnBot 记忆与人格**。页面只放 8 项常用配置：
+
+| 项 | 作用 |
+|---|---|
+| 总开关 | 关掉后记忆与人格功能整体停用（QQ 通道仍工作） |
+| 自动建档 | 按群消息为缺失的群卡/人物卡建骨架，只写可观测事实 |
+| 记忆召回 | 对话前自动捞相关记忆注入上下文 |
+| 记忆沉淀 | 定时从群聊提炼事实写进人物卡 History |
+| 主动说话 | 按时间窗自己开口（受 QQ 主动消息限制） |
+| 写操作仅主人 | 开启后群友只能搜/读/列记忆 |
+| 记忆目录 | 相对 qqbotDataRoot 的子目录 |
+| QQ 数据根 | 指向 <工作区>/Bot/dshqqbot |
+
+> 保存会让插件重启一次（这些字段不是 volatile），页面会提示。
+
+为什么不把 52 项全放出来：其中大半是调优旋钮（召回预算、沉淀条数、心跳窗口…），
+放出来只会让人不知道该怎么填。**默认值就是给日常用的**。
+
+### 直接改配置（高级）
+
+其余字段改 `cordis.patch.yml` 里 `id: bnnbotbox` 那一行的 `config`：
+
+```yaml
+- id: bnnbotbox
+  config:
+    enabled: true
+    qqbotDataRoot: "/sdcard/DSH/Bot/dshqqbot"
+    memorySubdir: .qqbot-extensions/data/group-memory
+```
+
+改完整份配置文件要重启 DSH 才生效。常用冷门项的说明见 `lib/memory/config.js` 的注释。
+
+
 全部字段可留空，运行时自动解析。
 
 | 字段 | 说明 | 默认 |
