@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 语法检查：能扫出 ES 语法错、类型混用等低级问题
+      - name: 语法检查
+        run: |
+          fail=0
+          for f in $(find lib test -name '*.js' -o -name '*.mjs'); do
+            node --check "$f" || { echo "❌ $f"; fail=1; }
+          done
+          exit $fail
+
+      # 依赖用 pnpm（本项目的 profile 生态是 pnpm）
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 安装依赖
+        run: pnpm install --prod=false
+
+      # 主入口必须能被 import —— 这是"能跑"的最低判据
+      - name: 主入口可导入
+        run: |
+          node --input-type=module -e "
+            const m = await import('./lib/index.js');
+            const n = Object.keys(m.Config.dict).length;
+            if (n < 50) throw new Error('配置字段异常: ' + n);
+            console.log('PASS', m.name, n, 'fields');
+          "
+
+      - name: 测试套件
+        run: node test/run-all.mjs
