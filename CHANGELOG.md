@@ -6,6 +6,44 @@
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-24
+
+### Added
+
+- **DSH 设置面板里的配置页**（设置 → BnnBot 记忆与人格）。
+
+  之前这个插件在手机上**没有任何界面**：52 项配置只能手改配置文件。
+  查清原因后才知道，DSH 的设置条目不是按 Config schema 自动生成的 ——
+  每个插件要自己写一个客户端页，注册进 `settings.section` slot
+  （QQ 机器人那页是 617 KB 手写客户端 + 约 40 个自定义 API）。
+
+  本次新增：
+  - `client/settings.js`：客户端页，注册 `settings.section`（id=bnnbotbox, order=30）
+  - `lib/settings-route.js`：宿主端点 `GET/POST /api/bnnbotbox/config`
+  - `package.json`：补 `exports["./client"]` 与 `dsh.client`（platform/immediately/inject）
+
+### 设计取舍
+
+- **只暴露 8 项常用配置**（总开关 / 自动建档 / 记忆召回 / 记忆沉淀 / 主动说话 /
+  写操作仅主人 / 记忆目录 / QQ 数据根）。其余 44 项是调优旋钮，放出来只会让人不知道填什么。
+- **保存走 `configEditor.edit()`**，绝不自己读写 `cordis.patch.yml`
+  （那是用户的文件，含别的插件、注释和 `!!js` 表达式）；
+  宿主负责校验、串行化、并拒绝被上层覆盖的值。
+- **两道鉴权**：口令在 apply 时随机生成、经 `webServer.tapIndex()` 注入 index.html，
+  客户端从全局变量取出后放请求头；另加「仅本机回环」检查。缺一即 403。
+- **未知字段直接 400**，不静默丢弃 —— 免得用户以为存上了。
+- 保存会让插件重启（这些字段不是 `volatile`），页面如实提示，不假装悄悄生效。
+
+### 验证
+
+- `test/r4/r4-settings-route.mjs` 新增 20 条断言：回环/令牌鉴权、字段白名单、
+  类型校验、未知字段拒绝、GET 返回当前值、POST 走 configEditor 且保留未改动字段
+- 客户端模块结构自检：ModuleLoader 格式、id=包名、react 来自模块表、注册 slot 正确
+
+> 注：3.1.4 把 `Config` 放进 default 导出，让宿主能读到 schema（状态 schema 而非 absent）。
+> 但那只解决「配置能被校验」，不解决「配置有界面」—— 界面靠本次新增的客户端页。
+
+
 ## [3.1.4] - 2026-11-24
 
 ### Fixed

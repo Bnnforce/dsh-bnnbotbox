@@ -1,6 +1,6 @@
 {
   "name": "dsh-bnnbotbox",
-  "version": "3.1.4",
+  "version": "3.2.0",
   "description": "QQ bot 人格与记忆一体化插件：四维情绪、生活联动、心跳主动开口、群记忆卡片、画像抽取。为 DeepSeek Harness 设计。",
   "type": "module",
   "main": "lib/index.js",
@@ -16,11 +16,13 @@
     },
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./shared/*": "./lib/shared/*.js"
+    "./shared/*": "./lib/shared/*.js",
+    "./client": "./client/settings.js"
   },
   "files": [
     "lib/**/*.js",
     "assets/**",
+    "client/**",
     "cordis.patch.yml",
     "README.md",
     "PRIVACY.md",
@@ -69,6 +71,14 @@
     "engines": {
       "dsh": ">=0.2.0-rc.2"
     },
-    "manifestVersion": 1
+    "manifestVersion": 1,
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
   }
 }
