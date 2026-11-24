@@ -6,6 +6,53 @@
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-11-24
+
+### Fixed — R6.2 三处「静默失效」
+
+R6.2 的语义召回写完后**从来没真正生效过**。三处接线全断了，而且都不报错。
+
+#### ① 配置没传到 recall host（最严重）
+
+`lib/persona/index.js` 创建 `createMemoryRecallHost` 时，只传了旧实现的那批字段（enabled / budgetChars / …），
+**R6.2 新加的 5 个字段一个都没传**。
+
+后果：`cfg.memoryRecallSemantic` 在 host 里永远是 `undefined`，语义召回走默认值——
+**改配置根本不生效**，而且没有任何报错。
+
+修法：补传 5 个字段。
+
+#### ② lastUserText 没传 gid
+
+语义召回要「按用户说了什么」检索，但调用是 `deps.lastUserText?.()` —— **空参**。
+而数据是按群存的 ⇒ 永远拿到空串 ⇒ 召回退化成「无查询 → 返回空」。
+
+修法：改成 `lastUserText?.(gid)`。
+
+#### ③ 衰退报告没落盘
+
+`onDecayReport` 钩子留了但没实现，决定「不灰度直接上」之后就没有事后回查的依据。
+
+修法：按日期写 `{数据根}/.qqbot-extensions/data/记忆降级/<YYYY-MM-DD>.jsonl`，
+一行一条，可 grep / 逐日审计。关掉：`memoryRecallDecayReport=false`。
+
+### Added
+
+- 插件侧 `recentUserTextOf(gid)`：读扩展包写入 globalThis 的「最近一条用户消息」。
+  **插件与扩展包是两套加载体系，不能互相 import**，只能走 `globalThis` + Symbol
+  （本项目 `recent-media` 已是同一做法）。改 Symbol 字符串时两边必须同时改。
+
+### 验证
+
+- `mock-recall-wiring.mjs`（新增，20 条断言）：
+  - 配置 5 个字段都传了
+  - `lastUserText` 传了 gid、无残留空参
+  - globalThis 通道端到端打通（扩展包写 → 插件读 → 超时失效 → 私聊不记）
+  - 衰退报告能落盘（目录 / 钩子 / appendFileSync / jsonl）
+  - **ephemeral 会被衰退 / pinned 绝不衰退**（安全线）
+- 插件测试 18/18，全量回归 **10/10**
+
+
 ## [3.3.0] - 2026-11-24
 
 ### Added — R6.2 语义记忆
