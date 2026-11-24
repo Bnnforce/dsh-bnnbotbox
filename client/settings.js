@@ -23,22 +23,50 @@ window.__ModuleLoader__.load({
     const TOKEN_GLOBAL = '__DSH_BNNBOTBOX_TOKEN__';
     const API = '/api/bnnbotbox/config';
 
+    /**
+     * 上一次保存的结果，**存在模块级**。
+     *
+     * 因为保存会让宿主重启插件，客户端模块随之重新求值、组件重新挂载 ——
+     * 只放在 useState 里的话，提示会在重启那一刻被清掉，
+     * 表现为「点了保存，提示一闪就没了」。
+     */
+    let lastResult = null;
+
     function token() {
       return (typeof window !== 'undefined' && window[TOKEN_GLOBAL]) || '';
     }
 
     async function request(method, patch) {
-      const res = await fetch(API, {
-        method,
-        headers: { 'x-bnn-token': token(), 'content-type': 'application/json' },
-        body: patch ? JSON.stringify({ patch }) : undefined,
-      });
+      /*
+       * 保存会让宿主重启插件 ⇒ 响应可能永远回不来。
+       * 所以自己带超时：超时也当作「已提交」，而不是让人对着「保存中…」干等。
+       */
+      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      let res;
+      try {
+        res = await fetch(API, {
+          method,
+          headers: { 'x-bnn-token': token(), 'content-type': 'application/json' },
+          body: patch ? JSON.stringify({ patch }) : undefined,
+          signal: ctrl ? ctrl.signal : undefined,
+        });
+      } catch (err) {
+        if (err && err.name === 'AbortError') {
+          return { ok: true, pending: true, saved: patch, note: '已提交，插件正在重启（本地等待超时）' };
+        }
+        throw err;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       let data;
       try {
         data = await res.json();
       } catch {
         throw new Error(`HTTP ${res.status}（响应不是 JSON）`);
       }
+      // 202 = 已提交、插件正在重启：这是成功，不是错误
+      if (res.status === 202 && data && data.ok) return data;
       if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
       return data;
     }
@@ -81,13 +109,25 @@ window.__ModuleLoader__.load({
         cursor: 'pointer',
       },
       msg: { fontSize: 13, lineHeight: '18px' },
+      /*
+       * 提示横幅：必须放在按钮上方。
+       * 放按钮下面时，手机上它会落到视口外 —— 实测用户点了保存、
+       * 提示其实出现了但没看见，于是以为「没有提示」。
+       */
+      notice: {
+        padding: '10px 12px',
+        borderRadius: 8,
+        fontSize: 13,
+        lineHeight: '19px',
+        borderLeft: '3px solid currentColor',
+      },
     };
 
     function Section() {
       const [state, setState] = React.useState({ loading: true, error: '' });
       const [draft, setDraft] = React.useState({});
       const [saving, setSaving] = React.useState(false);
-      const [notice, setNotice] = React.useState(null);
+      const [notice, setNotice] = React.useState(() => lastResult);
       const alive = React.useRef(true);
 
       React.useEffect(() => {
@@ -121,11 +161,19 @@ window.__ModuleLoader__.load({
         const patch = {};
         for (const k of changed) patch[k] = draft[k];
         try {
-          await request('POST', patch);
+          const r = await request('POST', patch);
           setState((s) => ({ ...s, values: { ...s.values, ...patch } }));
-          setNotice({ ok: true, text: '已保存。插件会重启一次使配置生效（当前会话可能短暂中断）。' });
+          lastResult = {
+            ok: true,
+            at: Date.now(),
+            text: r && r.pending
+              ? '已提交，插件正在重启以应用配置。几秒后刷新这个页面即可看到新值。'
+              : '已保存。插件会重启一次使配置生效（当前会话可能短暂中断）。',
+          };
+          setNotice(lastResult);
         } catch (err) {
-          setNotice({ ok: false, text: `保存失败：${err.message}` });
+          lastResult = { ok: false, at: Date.now(), text: `保存失败：${err.message}` };
+          setNotice(lastResult);
         } finally {
           setSaving(false);
         }
@@ -171,27 +219,35 @@ window.__ModuleLoader__.load({
         h('p', { style: S.intro },
           '这里只放常用的 8 项。其余调优参数（召回预算、沉淀条数等）请直接编辑插件配置。'),
         h('div', { style: S.card }, rows),
+        // 提示在按钮上方（见 S.notice 注释）
+        notice ? h('div', {
+          style: {
+            ...S.notice,
+            color: notice.ok
+              ? 'var(--dsw-alias-state-success-primary, #0a7)'
+              : 'var(--dsw-alias-state-error-primary, #c00)',
+            background: notice.ok
+              ? 'color-mix(in srgb, currentColor 10%, transparent)'
+              : 'color-mix(in srgb, currentColor 12%, transparent)',
+          },
+          role: 'status',
+          'aria-live': 'polite',
+        }, notice.text) : null,
+
         h('div', { style: S.bar },
           h('button', {
             type: 'button',
             style: { ...S.btn, opacity: saving || !changed.length ? 0.55 : 1, cursor: saving || !changed.length ? 'default' : 'pointer' },
             disabled: saving || !changed.length,
             onClick: save,
-          }, saving ? '保存中…' : changed.length ? `保存 ${changed.length} 项` : '没有改动'),
+          }, saving ? '保存中…' : changed.length ? `保存 ${changed.length} 项` : (notice && notice.ok ? '✓ 已保存' : '没有改动')),
           changed.length ? h('button', {
             type: 'button',
             style: S.btn,
             disabled: saving,
             onClick: () => setDraft(state.values || {}),
           }, '撤销') : null),
-        notice ? h('p', {
-          style: {
-            ...S.msg,
-            color: notice.ok
-              ? 'var(--dsw-alias-state-success-primary, #080)'
-              : 'var(--dsw-alias-state-error-primary, #c00)',
-          },
-        }, notice.text) : null);
+        );
     }
 
     return {

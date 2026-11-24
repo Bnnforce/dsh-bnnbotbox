@@ -123,6 +123,30 @@ const table = [];
 indexInject(table);
 ok(table.some((r) => r.kind === 'global' && r.name === TOKEN_GLOBAL && r.value === t1), '口令以 global 注入页面（' + TOKEN_GLOBAL + '）');
 
+
+console.log('=== 保存回执（重启竞速）');
+// 保存会重启插件 ⇒ 响应可能与拆插件赛跑。慢保存要回 202，不能让人干等。
+const slowHandler = createHandler({
+  readResolved: () => ({ enabled: true }),
+  save: () => new Promise(() => {}),           // 永不 resolve，模拟被重启打断
+  token: t1,
+});
+let sres = mkRes();
+const t0 = Date.now();
+await slowHandler(mkReq({ method: 'POST', body: JSON.stringify({ patch: { enabled: false } }) }), sres);
+const waited = Date.now() - t0;
+ok(sres.status === 202, '慢保存 → 202（已提交，重启中）');
+ok(json(sres).pending === true, '202 带 pending 标记（客户端据此换提示）');
+ok(waited < 8000, '不会无限等（实测 ' + waited + 'ms）');
+
+const failHandler = createHandler({
+  readResolved: () => ({ enabled: true }),
+  save: async () => { throw new Error('被上层覆盖'); },
+  token: t1,
+});
+sres = mkRes();
+await failHandler(mkReq({ method: 'POST', body: JSON.stringify({ patch: { enabled: false } }) }), sres);
+ok(sres.status === 500 && /被上层覆盖/.test(json(sres).error), '保存被拒 → 500 且如实回报错误');
 console.log('');
 console.log('通过 ' + pass + ' / 失败 ' + fail);
 process.exit(fail ? 1 : 0);
