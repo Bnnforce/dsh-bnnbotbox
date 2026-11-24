@@ -31,6 +31,29 @@ try {
   const main = await import(`file://${PKG_ROOT}/lib/index.js`);
   ok(typeof main.apply === 'function', '主入口有 apply');
   ok(typeof main.Config === 'function', '主入口导出 Config');
+
+  /*
+   * ★ 2026-11-24 新增：DSH 的 Loader.unwrapExports() 是
+   *     exports = exports.default ?? exports;
+   *   —— 只要模块有 default 导出，宿主就**只认 default**，named 导出一律不看。
+   *   所以 Config 必须也放进 default，否则宿主 configOf() 拿到 undefined，
+   *   设置面板里该插件条目状态变成 absent（无法配置，且没有任何报错）。
+   *   本机实测过：default 不带 Config → absent；带上 → schema（52 字段）。
+   */
+  const dflt = main.default;
+  ok(!!dflt && typeof dflt === 'object', '主入口有 default 导出');
+  ok(!!dflt && dflt.Config !== undefined, '★ default 导出带 Config（宿主只认 default）');
+  ok(!!dflt && dflt.Config === main.Config, '★ default.Config 与 named Config 同一个');
+  ok(
+    !!dflt && Reflect.get(dflt.Config, Symbol.for('schemastery')) === true,
+    '★ default.Config 是原生 Schemastery schema（否则宿主判 unsupported）',
+  );
+  ok(
+    !!dflt && typeof Reflect.get(dflt.Config, 'type') === 'string'
+      && Reflect.get(dflt.Config, 'meta') !== null
+      && typeof Reflect.get(dflt.Config, 'meta') === 'object',
+    '★ 满足 isNativeConfigSchema 的三项条件',
+  );
   ok(Array.isArray(main.inject), `inject = [${main.inject.join(', ')}]`);
 
   // ② Config 解析

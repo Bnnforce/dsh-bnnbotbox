@@ -6,6 +6,35 @@
 
 ## [Unreleased]
 
+## [3.1.4] - 2026-11-24
+
+### Fixed
+
+- **DSH 设置面板里本插件无法配置（状态 absent）**。
+
+  DSH 的 `Loader.unwrapExports()` 是：
+
+  ```js
+  exports = exports.default ?? exports;
+  ```
+
+  也就是说 **只要模块有 `default` 导出，宿主就只认 `default`**，named 导出完全不看。
+  我们的 `default` 原来是 `{ name, inject, apply }` —— 没有 `Config`，于是宿主
+  `configOf(plugin)` 拿到 `undefined` ⇒ 该条目状态为 `absent`，**52 个配置项在界面上一个都看不到**，
+  而且没有任何报错。
+
+  现在把 `Config` / `resolveConfig` 放进 `default`（named 导出保留，兼容其它调用方式）。
+  离线复现宿主的投影逻辑验证过：旧形态 → `absent`；新形态 → `schema`（52 字段）。
+
+### Added
+
+- `test/run-all.mjs` 新增 5 条断言，锁住「default 必须带 Config 且是原生 Schemastery schema」：
+  default 存在、default.Config 存在、与 named 同一个、`Symbol.for("schemastery") === true`、
+  以及 `isNativeConfigSchema` 的三项条件（symbol / type / meta）。
+
+> 这个坑值得单独记：它**不会报错**，只是让配置在 UI 上凭空消失。
+
+
 ## [3.1.3] - 2026-11-24
 
 ### Fixed
