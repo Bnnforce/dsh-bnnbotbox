@@ -6,6 +6,43 @@
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-11-24
+
+### Fixed — R6.4 情绪向中性回归（真 bug）
+
+#### connection / composure 恒 0
+
+**症状**：八维情绪里 connection 和 composure 长期停在 0（中性应为 0.5）。
+
+**根因**：`drift()` 对「无信号的维度」直接 `continue` 跳过，不做任何回归。
+这两个维度只靠对话信号驱动（"想说话/安静"→connection，"紧张/从容"→composure），
+信号稀疏，一旦被某次负信号压低（反复 clamp 到 0），就永远停在那里 ——
+即使她最近根本不紧张、不安静。
+
+**修法**：给 drift() 加 `REVERT_RATE=0.02` 的向中性回归。
+- 有信号的维度：EMA 推进 + 极轻微回归
+- 无信号的维度：只朝 0.5 轻轻靠一点
+- 远小于 ALPHA(0.25)，不会淹没真实情绪信号
+
+### Added — 情绪历史（R6.4）
+
+新增 `mood-history.js`：每天一份八维快照，保留 30 天。
+- `writeAxes()` 写成功后顺带记录（幂等，同一天覆盖写）
+- `readHistory()` 读最近 N 天趋势
+- `pruneOld()` 自动清理超 30 天的
+- 文件：`state/mood-history/YYYY-MM-DD.json`（每个 <1KB）
+
+### 验证
+
+- `mock-r64-mood.mjs`（扩展包侧）：17 条断言
+  - 向中性回归（connection/composure 从 0 回升）
+  - 情绪历史快照写入/读回/清理
+  - 情绪参与接话决策（默认关，moodBias ±0.1）
+  - /状态 命令（owner gate + 人话输出）
+- 更新 `mock-mood.mjs` 一条断言（无信号从"不改变"改为"轻微回归"）
+- 插件测试 18/18，全量回归 **10/10**
+
+
 ## [3.3.1] - 2026-11-24
 
 ### Fixed — R6.2 三处「静默失效」
