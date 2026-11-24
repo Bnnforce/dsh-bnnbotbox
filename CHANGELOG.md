@@ -6,6 +6,44 @@
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-11-24
+
+### Fixed
+
+- **设置页能打开但读不到配置（HTTP 404）**。3.2.0 的端点用
+  `ctx.get("webServer")` 拿服务，而 Cordis 的服务代理在服务**未声明进 inject**
+  时会直接抛：
+
+  ```
+  cannot get property "webServer" without inject
+  ```
+
+  这个异常被 apply 的 try/catch 吞掉了，所以现象是：**设置页正常出现，
+  但 `GET /api/bnnbotbox/config` 返回 404**，页面上显示「读不到配置」。
+
+  改为 `ctx.inject(["webServer"], (webCtx) => { ... })` —— 子 fiber 在服务就绪时
+  激活，插件卸载时自动清理路由。
+
+- **口令改为跨插件重启存活**（`globalThis` 上的 symbol 槽）。
+  原实现每次 apply 重新生成口令，而保存配置会重启插件 ⇒ 存一次之后页面上的
+  口令立刻失效，第二次保存必然 403。现在同一宿主进程内口令不变。
+
+### Changed
+
+- 口令注入改用 DSH 的正规机制 `webserver/index-inject` 事件
+  （`{ kind: "global", name, value }`），不再用 `tapIndex` 做 HTML 字符串替换。
+  宿主侧实现见 `dsh-client-web`：`case "global": globalThis[row.name] = row.value`。
+- 端点逻辑拆成 `createHandler({ readResolved, save, token })`，可脱离 Cordis 单测。
+
+### 验证
+
+- `test/r4/r4-settings-route.mjs` 扩到 **25 条断言**，新增：
+  - 断言安装走 `ctx.inject(["webServer"])` 而**不是** `ctx.get`（把这次的坑钉死）
+  - 断言口令跨调用稳定（模拟插件重启）
+  - 断言口令以 `kind: "global"` 注入页面
+  - 405 / 坏 JSON / 空补丁 / 未知字段 四条拒绝路径
+
+
 ## [3.2.0] - 2026-11-24
 
 ### Added
