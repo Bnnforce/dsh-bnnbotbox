@@ -74,6 +74,30 @@ window.__ModuleLoader__.load({
     // ── 样式（跟随宿主主题变量，不自带配色）────────────────────────────
     const S = {
       wrap: { maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 12 },
+      // ── 横向分类标签（2026-11-25）──────────────────────────────────────
+      //   为什么用横向 tab 而不是纵向堆 7 个分组：
+      //     54 项纵向堆下来要滚很久，找一项得滑半天。横向标签一屏能看全，
+      //     点一下就切到那一组，比"滚动找"快得多。
+      tabBar: {
+        display: 'flex', flexWrap: 'wrap', gap: 6,
+        paddingBottom: 10, borderBottom: '1px solid var(--dsw-alias-border-l2)',
+      },
+      tab: {
+        padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+        fontSize: 13, border: '1px solid var(--dsw-alias-border-l2)',
+        background: 'transparent', color: 'var(--dsw-alias-label-secondary)',
+        transition: 'all .12s',
+      },
+      tabActive: {
+        padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+        fontSize: 13, fontWeight: 600,
+        border: '1px solid var(--dsw-alias-state-success-primary, #0a7)',
+        background: 'color-mix(in srgb, var(--dsw-alias-state-success-primary, #0a7) 14%, transparent)',
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      tabBadge: {
+        marginLeft: 5, fontSize: 11, opacity: 0.7,
+      },
       title: { margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--dsw-alias-label-primary)' },
       intro: { margin: 0, fontSize: 13, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' },
       card: {
@@ -129,13 +153,16 @@ window.__ModuleLoader__.load({
       const [saving, setSaving] = React.useState(false);
       const [notice, setNotice] = React.useState(() => lastResult);
       const alive = React.useRef(true);
+      // ★ 2026-11-25：分组 tab 的选中态。必须放在组件顶部与其他 hooks 同级——
+      //   放到 loading 分支之后会违反 React Hooks 规则（hooks 不能条件调用）。
+      const [activeTab, setActiveTab] = React.useState('');
 
       React.useEffect(() => {
         alive.current = true;
         request('GET')
           .then((data) => {
             if (!alive.current) return;
-            setState({ loading: false, error: '', fields: data.fields, values: data.values });
+            setState({ loading: false, error: '', fields: data.fields, groups: data.groups || [], values: data.values });
             setDraft(data.values || {});
           })
           .catch((err) => {
@@ -242,39 +269,56 @@ window.__ModuleLoader__.load({
       };
 
       /** 按 group 把字段分组渲染。 */
-      const renderGroups = () => {
-        const groups = state.groups || [];
-        const fields = state.fields || [];
-        const out = [];
-        for (const g of groups) {
-          const members = fields.filter((f) => f.group === g.id);
-          if (!members.length) continue;
-          out.push(h('div', { key: 'g-' + g.id, style: { marginBottom: 6 } },
-            h('h3', {
-              style: {
-                margin: '0 0 2px', fontSize: 14, fontWeight: 600,
-                color: 'var(--dsw-alias-label-primary)',
+      /** 当前选中的分组 tab（默认第一个）。 */
+      const groups = state.groups || [];
+      const fields = state.fields || [];
+
+      /** 各分组的项数（显示在 tab 上的小数字）。 */
+      const countOf = (gid) => fields.filter((f) => f.group === gid).length;
+
+      /** 有内容的分组（跳过空组）。 */
+      const visibleGroups = groups.filter((g) => countOf(g.id) > 0);
+
+      /** 没归组的字段兜底成一"其它"组，避免未来加字段忘了打 group 就消失。 */
+      const orphans = fields.filter((f) => !groups.some((g) => g.id === f.group));
+      if (orphans.length) visibleGroups.push({ id: '__other', label: '其它', desc: '未归组的配置项' });
+
+      /** 实际生效的 tab：用户点过就用它，没点过或失效了就用第一个。 */
+      const curTab = visibleGroups.some((g) => g.id === activeTab)
+        ? activeTab
+        : (visibleGroups[0] ? visibleGroups[0].id : '');
+
+      const curGroup = visibleGroups.find((g) => g.id === curTab);
+      const curFields = curTab === '__other'
+        ? orphans
+        : fields.filter((f) => f.group === curTab);
+
+      /** 横向分类标签栏。 */
+      const tabBar = visibleGroups.length > 1
+        ? h('div', { style: S.tabBar },
+            visibleGroups.map((g) => {
+              const active = g.id === curTab;
+              const n = g.id === '__other' ? orphans.length : countOf(g.id);
+              return h('button', {
+                key: 'tab-' + g.id,
+                type: 'button',
+                style: active ? S.tabActive : S.tab,
+                onClick: () => setActiveTab(g.id),
               },
-            }, g.label),
-            g.desc ? h('p', {
-              style: { margin: '0 0 10px', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' },
-            }, g.desc) : null,
-            h('div', { style: S.card }, members.map(renderField))));
-        }
-        const orphans = fields.filter((f) => !groups.some((g) => g.id === f.group));
-        if (orphans.length) {
-          out.push(h('div', { key: 'g-other', style: { marginBottom: 6 } },
-            h('h3', { style: { margin: '0 0 10px', fontSize: 14, fontWeight: 600 } }, '其它'),
-            h('div', { style: S.card }, orphans.map(renderField))));
-        }
-        return out;
-      };
+                g.label,
+                h('span', { style: S.tabBadge }, String(n)));
+            }))
+        : null;
 
       return h('div', { style: S.wrap },
         h('h2', { style: S.title }, 'BnnBot 记忆与人格'),
         h('p', { style: S.intro },
-          '按功能分组。改完点保存，插件会重启一次使配置生效（当前会话可能短暂中断）。'),
-        ...renderGroups(),
+          '按功能分类。改完点保存，插件会重启一次使配置生效（当前会话可能短暂中断）。'),
+        tabBar,
+        curGroup && curGroup.desc
+          ? h('p', { style: { ...S.intro, marginTop: 2 } }, curGroup.desc)
+          : null,
+        h('div', { style: S.card }, curFields.map(renderField)),
         notice ? h('div', {
           style: {
             ...S.notice,
