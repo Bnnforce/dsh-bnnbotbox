@@ -74,7 +74,7 @@ console.log('T1 高光按群过滤');
 console.log('\nT2 tcDriving 必须被使用');
 {
   const src = readFileSync(
-    (new URL('../../', import.meta.url).pathname.replace(/\/$/, '')) + '/src/maintenance-tasks.ts',
+    (new URL('../../', import.meta.url).pathname.replace(/\/$/, '')) + '/lib/persona/maintenance-tasks.js',
     'utf8',
   );
   // 关键：登记成功只是必要条件，还必须引擎 live

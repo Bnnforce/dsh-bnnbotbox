@@ -29,7 +29,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const indexPath = '../../lib/persona/index.js';
-const srcPath = new URL('../../src/index.ts', import.meta.url);
 
 let checks = 0;
 function ok(cond, label) {
@@ -174,9 +173,9 @@ function withTempRoot(fn) {
   // ★ 2026-11-05（重构任务 B5）：补偿逻辑已从 index.ts 搬到 maintenance-tasks.ts，
   //   所以这里改为**聚合整个 src 目录**再断言 —— 不依赖"某段代码在哪个文件里"。
   const src = (() => {
-    const dir = new URL('../../src/', import.meta.url);
+    const dir = new URL('../../lib/persona/', import.meta.url);
     return readdirSync(dir)
-      .filter((n) => n.endsWith('.ts'))
+      .filter((n) => n.endsWith('.js'))
       .map((n) => readFileSync(new URL(n, dir), 'utf8'))
       .join('\n');
   })();
