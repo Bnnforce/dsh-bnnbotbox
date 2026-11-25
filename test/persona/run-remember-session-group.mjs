@@ -86,7 +86,9 @@ console.log('\nT5 超 500 条 → 保留最新');
 
 console.log('\nT6 原子写：无 .tmp- 残留');
 {
-  const dir = join(TMP, 'data', 'dsh-anti-ai-persona');
+  // ★ 2026-11-25：不硬编码目录名——数据根由 resolveDataRoot 决定（旧用户沿用 dsh-anti-ai-persona，新环境 bnn-botbox）。
+  const { resolveDataRoot } = await import('../../lib/shared/paths.js');
+  const dir = resolveDataRoot();
   const stale = readdirSync(dir).filter((n) => n.includes('.tmp-'));
   ok(stale.length === 0, '无临时文件残留', stale.join(','));
 }

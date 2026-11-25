@@ -132,7 +132,8 @@ assert.deepEqual(saved, ['回复短一点', '少用句号', '别像 AI']);
 const overlay = store.readOverlaySync();
 assert.ok(!overlay.includes('[近期行为禁忌'), '文件只存正文，不存包装标签');
 assert.ok(overlay.includes('回复短一点'));
-assert.ok(existsSync(join(root, 'data', 'dsh-anti-ai-persona', 'overlay.md')));
+// ★ 2026-11-25：不硬编码目录名——用 store 自己的路径函数（数据根可能是 dsh-anti-ai-persona 或 bnn-botbox）。
+assert.ok(existsSync(store.overlayPath()));
 store.writeOverlaySync('## 比安安专属\n- 短一点', 'AAAA', '比安安');
 store.writeOverlaySync('## 爱莉希雅专属\n- 更活泼', 'AAAA', '爱莉希雅');
 assert.ok(store.readOverlaySync('AAAA', '比安安').includes('比安安专属'));

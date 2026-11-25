@@ -222,7 +222,9 @@ console.log('T3 宿主适配器（三重防御）');
   let service = svc;
   const host = H.createMemoryRecallHost({
     getService: () => service,
-    config: H.normalizeMemoryRecallConfig({}),
+    // ★ 2026-11-25：R6.2 起默认走语义召回（需 lastUserText 作查询词，没有则返回空）。
+    //   本用例断言的是**经典召回路径**（人物卡摘要），所以显式关掉语义分支。
+    config: H.normalizeMemoryRecallConfig({ memoryRecallSemantic: false }),
     now: () => NOW,
     diagDir,
   });
