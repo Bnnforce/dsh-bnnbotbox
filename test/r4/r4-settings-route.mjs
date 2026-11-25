@@ -95,7 +95,10 @@ ok(res.status === 400, '空补丁 → 400');
 
 res = mkRes();
 await handler(mkReq({ method: 'POST', body: JSON.stringify({ patch: { autoCardEnabled: false } }) }), res);
-ok(res.status === 200 && saved && saved.autoCardEnabled === false, 'POST → 调用 save');
+// ★ 2026-11-25：autoCardEnabled 是 memory 侧字段，现在按来源写进 config.memory
+//   （见 settings-route 的 source 分流）。旧断言只看顶层，已随实现更新。
+ok(res.status === 200 && saved && saved.memory && saved.memory.autoCardEnabled === false,
+  'POST → 调用 save（memory 字段写入 config.memory）');
 ok(saved.enabled === true && saved.memorySubdir === 'm', 'POST 保留未改动字段（浅合并语义正确）');
 
 console.log('=== 安装（假 ctx，验证 inject 路径）');
