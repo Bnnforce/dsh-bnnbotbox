@@ -4,6 +4,13 @@ QQ 机器人的人格与记忆一体化插件，为 [DeepSeek Harness](https://g
 
 **她住在你的 QQ 群里**：有稳定人格、记得住人、会主动说话、表情包和贴纸都看得懂。
 
+<p align="center">
+  <img src="docs/screenshots/03-chat.jpg" width="46%" alt="群聊对话：@她之后的自然回复">
+  <img src="docs/screenshots/04-status.jpg" width="46%" alt="~ 命令查看她的当前情绪状态">
+</p>
+
+> 左：@ 她之后的自然回复（会引用你上一条）。右：`/状态` 看她的八维情绪。
+
 ---
 
 ## 30 秒跑起来
