@@ -188,38 +188,93 @@ window.__ModuleLoader__.load({
             `读不到配置：${state.error}`));
       }
 
-      const rows = (state.fields || []).map((f) => {
+      /** 单个字段的控件。按 kind 决定用 checkbox / number / text。 */
+      const renderControl = (f) => {
         const value = draft[f.key];
-        const control = f.kind === 'boolean'
-          ? h('input', {
-              type: 'checkbox',
-              checked: value !== false,
+        if (f.kind === 'boolean') {
+          return h('input', {
+            type: 'checkbox',
+            checked: value !== false,
+            'aria-label': f.label,
+            disabled: saving,
+            onChange: (e) => set(f.key, e.target.checked),
+            style: { marginTop: 3, cursor: 'pointer' },
+          });
+        }
+        if (f.kind === 'number') {
+          return h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
+            h('input', {
+              type: 'number',
+              value: value == null ? '' : value,
+              min: f.min,
+              max: f.max,
+              step: f.step || 1,
               'aria-label': f.label,
               disabled: saving,
-              onChange: (e) => set(f.key, e.target.checked),
-              style: { marginTop: 3, cursor: 'pointer' },
-            })
-          : h('input', {
-              type: 'text',
-              value: value == null ? '' : String(value),
-              'aria-label': f.label,
-              disabled: saving,
-              onChange: (e) => set(f.key, e.target.value),
-              style: { ...S.input, marginTop: 6 },
-            });
-        return h('div', { key: f.key, style: { ...S.row, flexDirection: f.kind === 'boolean' ? 'row' : 'column' } },
+              onChange: (e) => set(f.key, e.target.value === '' ? '' : Number(e.target.value)),
+              style: { ...S.input, marginTop: 0, flex: '0 0 140px' },
+            }),
+            h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' } },
+              (f.min !== undefined && f.max !== undefined ? `${f.min} ~ ${f.max}` : '')
+              + (f.unit ? ` ${f.unit}` : '')));
+        }
+        return h('input', {
+          type: 'text',
+          value: value == null ? '' : String(value),
+          'aria-label': f.label,
+          disabled: saving,
+          onChange: (e) => set(f.key, e.target.value),
+          style: { ...S.input, marginTop: 6 },
+        });
+      };
+
+      /** 单个字段一行。 */
+      const renderField = (f) => {
+        const isBool = f.kind === 'boolean';
+        return h('div', {
+          key: f.key,
+          style: { ...S.row, flexDirection: isBool ? 'row' : 'column' },
+        },
           h('label', { style: S.label },
             h('span', { style: S.name }, f.label),
             h('span', { style: S.hint }, f.hint)),
-          control);
-      });
+          renderControl(f));
+      };
+
+      /** 按 group 把字段分组渲染。 */
+      const renderGroups = () => {
+        const groups = state.groups || [];
+        const fields = state.fields || [];
+        const out = [];
+        for (const g of groups) {
+          const members = fields.filter((f) => f.group === g.id);
+          if (!members.length) continue;
+          out.push(h('div', { key: 'g-' + g.id, style: { marginBottom: 6 } },
+            h('h3', {
+              style: {
+                margin: '0 0 2px', fontSize: 14, fontWeight: 600,
+                color: 'var(--dsw-alias-label-primary)',
+              },
+            }, g.label),
+            g.desc ? h('p', {
+              style: { margin: '0 0 10px', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' },
+            }, g.desc) : null,
+            h('div', { style: S.card }, members.map(renderField))));
+        }
+        const orphans = fields.filter((f) => !groups.some((g) => g.id === f.group));
+        if (orphans.length) {
+          out.push(h('div', { key: 'g-other', style: { marginBottom: 6 } },
+            h('h3', { style: { margin: '0 0 10px', fontSize: 14, fontWeight: 600 } }, '其它'),
+            h('div', { style: S.card }, orphans.map(renderField))));
+        }
+        return out;
+      };
 
       return h('div', { style: S.wrap },
         h('h2', { style: S.title }, 'BnnBot 记忆与人格'),
         h('p', { style: S.intro },
-          '这里只放常用的 8 项。其余调优参数（召回预算、沉淀条数等）请直接编辑插件配置。'),
-        h('div', { style: S.card }, rows),
-        // 提示在按钮上方（见 S.notice 注释）
+          '按功能分组。改完点保存，插件会重启一次使配置生效（当前会话可能短暂中断）。'),
+        ...renderGroups(),
         notice ? h('div', {
           style: {
             ...S.notice,
@@ -248,18 +303,18 @@ window.__ModuleLoader__.load({
             onClick: () => setDraft(state.values || {}),
           }, '撤销') : null),
         );
-    }
-
-    return {
-      inject: ['slots'],
-      apply(ctx) {
-        ctx.slots.inject('settings.section', () => ctx.slots.register({
-          name: 'settings.section',
-          id: 'bnnbotbox',
-          order: 30,
-          label: () => 'BnnBot 记忆与人格',
-        }, Section));
-      },
-    };
-  },
+      }
+  
+      return {
+        inject: ['slots'],
+        apply(ctx) {
+          ctx.slots.inject('settings.section', () => ctx.slots.register({
+            name: 'settings.section',
+            id: 'bnnbotbox',
+            order: 30,
+            label: () => 'BnnBot 记忆与人格',
+          }, Section));
+        },
+      };
+    },
 });
