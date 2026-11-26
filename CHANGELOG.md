@@ -6,6 +6,37 @@
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-26
+
+### Added — R8 二跳发散思维 + 自我感知/学习/进化
+
+#### S0 二跳发散思维进人格层（核心诉求）
+
+「不管什么状态，主动注入还是被动注入，都能像人一样发散思维思考」。
+
+- 关键认知：发散必须进**人格层** `getMemoryRecall`（挂载在 `system-prompt/assemble`，所有回合统一注入点），不是扩展包层的 pre-step 钩子
+- `semantic-recall.js` 新增 `associateHits()` 纯函数：从第 1 跳命中提取关键词 → 再 search 关联一层 → 排除已命中 id
+- 280 字预算不变、输出契约 `{text,used,present}` 不变、跨群隔离不变
+- 永不抛错，发散失败自动回落单跳；可配置关闭（`memoryRecallAssoc=false`）
+
+#### S8 自我感知 / 自我学习 / 自我进化（B 档建议式）
+
+三个纯函数，零写文件，决策靠算法不靠 LLM：
+
+- `mood-self-report.js` — 极端状态强化（mood 偏离分级措辞）
+- `preference-behavior.js` — 偏好→行为映射
+- `evolution-proposal.js` — 进化提案（白名单 5 项 / 黑名单 9 项 / 四道护栏）
+
+白名单：回复长度、表情频率、语气词、口头禅、主动说话频率。
+黑名单：名字/身份、核心性格、关系定位、价值观、角色卡。
+
+### 验证
+
+- mock-semantic-assoc 14/14（二跳发散：关联、排除、跨群、契约、预算、回落、开关）
+- mock-semantic-recall 23/23（契约回归无破坏）
+- mock-r8-evolution 83/83（自我进化）
+- 端到端：真实记忆数据下召回 + 二跳关联正常
+
 ## [3.4.0] - 2026-11-24
 
 ### Fixed — R6.4 情绪向中性回归（真 bug）
