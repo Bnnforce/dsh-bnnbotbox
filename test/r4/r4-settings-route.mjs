@@ -111,7 +111,8 @@ const fakeWebCtx = {
   webServer: {
     register: (r) => { routes.push(r); return () => {}; },
   },
-  effect: (fn) => { const d = fn(); return () => d?.(); },
+  // ★ cordis effect(execute) 会**立即执行** execute 并收集返回值当清理函数
+  effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
 };
 const fakeCtx = {
   fiber: { entry: {} },
@@ -204,6 +205,32 @@ console.log('=== 同源握手（注入失效时的兜底）');
   const r3 = mkRes();
   await hs(reqOf({ 'sec-fetch-site': 'same-origin' }, '10.0.0.9'), r3);
   ok(r3.status === 403, '非本机即便同源标记也拒');
+}
+
+// ── effect 语义回归锁（2026-11-26）───────────────────────────────────────
+console.log('=== effect 语义（注册完不能立刻被清掉）');
+{
+  // 真机 bug：cordis 的 effect(execute) 会**立即执行** execute。
+  //   旧代码先 register、再把 offRoute 当清理函数传给 effect ⇒
+  //   effect 立即执行它 ⇒ 注册完立刻删除 ⇒ exactHas=false ⇒ 设置页 404。
+  //   这条测试用真实的 exact 表语义锁住它。
+  const exact = new Map();
+  const fakeWs = {
+    register: (r) => { exact.set(r.path, r); return () => exact.delete(r.path); },
+  };
+  const fakeWeb = {
+    get: () => undefined,
+    webServer: fakeWs,
+    effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => {}; },
+  };
+  const fakeC = {
+    fiber: { entry: {} },
+    on: () => () => {},
+    inject: (deps, cb) => cb(fakeWeb),
+  };
+  installSettingsRoute(fakeC, () => ({ enabled: true }), { info: () => {}, warn: () => {} });
+  ok(exact.has(ROUTE_PATH), '★ 配置路由注册后仍在表里（不会被 effect 立刻清掉）');
+  ok(exact.has(HANDSHAKE_PATH), '★ 握手路由注册后仍在表里');
 }
 
 console.log('');
