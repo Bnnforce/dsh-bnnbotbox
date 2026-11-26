@@ -13,7 +13,7 @@
  */
 import { Readable } from 'node:stream';
 import {
-  FIELDS, ROUTE_PATH, TOKEN_GLOBAL,
+  FIELDS, ROUTE_PATH, TOKEN_GLOBAL, HANDSHAKE_PATH,
   createHandler, installSettingsRoute, isLoopback, pickFields,
   sanitizePatch, settingsToken,
 } from '../../lib/settings-route.js';
@@ -104,24 +104,33 @@ ok(saved.enabled === true && saved.memorySubdir === 'm', 'POST 保留未改动�
 console.log('=== 安装（假 ctx，验证 inject 路径）');
 let injectedDeps = null;
 let mountCb = null;
-let registered = null;
+const routes = [];
 let indexInject = null;
 const fakeWebCtx = {
   get: () => undefined,
   webServer: {
-    register: (r) => { registered = r; return () => {}; },
+    register: (r) => { routes.push(r); return () => {}; },
   },
-  on: (ev, cb) => { if (ev === 'webserver/index-inject') indexInject = cb; return () => {}; },
   effect: (fn) => { const d = fn(); return () => d?.(); },
 };
 const fakeCtx = {
   fiber: { entry: {} },
+  // ★ 2026-11-26：注入监听现在挂**外层 ctx**（官方写法），所以这里要能接 on。
+  on: (ev, cb) => { if (ev === 'webserver/index-inject') indexInject = cb; return () => {}; },
   inject: (deps, cb) => { injectedDeps = deps; mountCb = cb; cb(fakeWebCtx); },
 };
 installSettingsRoute(fakeCtx, () => ({ enabled: true }), { info: () => {}, warn: () => {} });
 ok(JSON.stringify(injectedDeps) === JSON.stringify(['webServer']), "走 ctx.inject(['webServer']) —— 不是 ctx.get");
-ok(registered && registered.kind === 'exact', '路由 kind=exact');
-ok(registered && registered.path === ROUTE_PATH, '路由路径 = ' + ROUTE_PATH);
+
+// 两条路由：配置 + 同源握手
+const cfgRoute = routes.find((r) => r.path === ROUTE_PATH);
+const hsRoute = routes.find((r) => r.path === HANDSHAKE_PATH);
+ok(routes.length === 2, '注册两条路由（实际 ' + routes.length + '）');
+ok(cfgRoute && cfgRoute.kind === 'exact', '配置路由 kind=exact');
+ok(cfgRoute && cfgRoute.path === ROUTE_PATH, '配置路由路径 = ' + ROUTE_PATH);
+ok(hsRoute && hsRoute.kind === 'exact', '握手路由已注册（' + HANDSHAKE_PATH + '）');
+
+ok(typeof indexInject === 'function', '注入监听挂在外层 ctx');
 const table = [];
 indexInject(table);
 ok(table.some((r) => r.kind === 'global' && r.name === TOKEN_GLOBAL && r.value === t1), '口令以 global 注入页面（' + TOKEN_GLOBAL + '）');
@@ -150,6 +159,53 @@ const failHandler = createHandler({
 sres = mkRes();
 await failHandler(mkReq({ method: 'POST', body: JSON.stringify({ patch: { enabled: false } }) }), sres);
 ok(sres.status === 500 && /被上层覆盖/.test(json(sres).error), '保存被拒 → 500 且如实回报错误');
+// ── 同源握手（2026-11-26 新增）─────────────────────────────────────────
+console.log('=== 同源握手（注入失效时的兜底）');
+{
+  // 背景：真机上设置页曾报「读不到配置：缺少有效令牌」——
+  //   HTML 注入的 window.__DSH_BNNBOTBOX_TOKEN__ 在某些宿主上拿不到。
+  //   兜底方案：页面用同源标记换口令。
+  const M2 = await import('../../lib/settings-route.js');
+
+  ok(typeof M2.isSameOriginPage === 'function', '导出 isSameOriginPage');
+  ok(typeof M2.createHandshakeHandler === 'function', '导出 createHandshakeHandler');
+  ok(M2.HANDSHAKE_PATH === '/api/bnnbotbox/handshake', '握手路径正确');
+
+  // 判定：谁能换口令
+  ok(M2.isSameOriginPage({ headers: { 'sec-fetch-site': 'same-origin' } }) === true,
+    '同源页面可以换');
+  ok(M2.isSameOriginPage({ headers: { 'sec-fetch-site': 'none' } }) === true,
+    '地址栏直开可以换');
+  ok(M2.isSameOriginPage({ headers: { 'sec-fetch-site': 'cross-site' } }) === false,
+    '跨站页面被拒');
+  ok(M2.isSameOriginPage({ headers: { referer: 'http://127.0.0.1:4145/s' } }) === true,
+    'Referer 本机可以换');
+  ok(M2.isSameOriginPage({ headers: { referer: 'http://evil.example/x' } }) === false,
+    'Referer 外网被拒');
+  ok(M2.isSameOriginPage({ headers: {} }) === false,
+    '裸 curl（无浏览器标记）被拒');
+
+  // 端点行为
+  const hs = M2.createHandshakeHandler({ token: 'tk-abc' });
+  // 直接构造最小 req（mkReq 会覆盖 headers，这里要精确控制浏览器的头）
+  const reqOf = (headers, remote = '127.0.0.1') => {
+    const r = Readable.from([]);
+    r.method = 'GET';
+    r.socket = { remoteAddress: remote };
+    r.headers = headers;
+    return r;
+  };
+  const r1 = mkRes();
+  await hs(reqOf({ 'sec-fetch-site': 'same-origin' }), r1);
+  ok(r1.status === 200 && json(r1).token === 'tk-abc', '同源请求拿到口令');
+  const r2 = mkRes();
+  await hs(reqOf({}), r2);
+  ok(r2.status === 403, '非浏览器请求拿不到口令');
+  const r3 = mkRes();
+  await hs(reqOf({ 'sec-fetch-site': 'same-origin' }, '10.0.0.9'), r3);
+  ok(r3.status === 403, '非本机即便同源标记也拒');
+}
+
 console.log('');
 console.log('通过 ' + pass + ' / 失败 ' + fail);
 process.exit(fail ? 1 : 0);

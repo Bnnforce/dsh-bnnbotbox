@@ -22,6 +22,11 @@ window.__ModuleLoader__.load({
     /** 从 index.html 注入的全局变量里取口令（见 lib/settings-route.js）。 */
     const TOKEN_GLOBAL = '__DSH_BNNBOTBOX_TOKEN__';
     const API = '/api/bnnbotbox/config';
+    /** 同源握手端点：HTML 注入没生效时用它换口令（2026-11-26）。 */
+    const HANDSHAKE = '/api/bnnbotbox/handshake';
+
+    /** 模块级握手缓存（保存会重启插件、口令轮换，失败时失效重取）。 */
+    let handshaken = '';
 
     /**
      * 上一次保存的结果，**存在模块级**。
@@ -32,8 +37,33 @@ window.__ModuleLoader__.load({
      */
     let lastResult = null;
 
+    /** 同步取已知口令（不发起网络请求）。 */
     function token() {
-      return (typeof window !== 'undefined' && window[TOKEN_GLOBAL]) || '';
+      if (typeof window !== 'undefined' && window[TOKEN_GLOBAL]) return window[TOKEN_GLOBAL];
+      return handshaken;
+    }
+
+    /**
+     * 确保拿到口令：优先全局变量，取不到就同源握手换一个。
+     *
+     * 背景（2026-11-26 真机）：设置页曾显示「读不到配置：缺少有效令牌」——
+     * HTML 注入在某些宿主上不生效，但端点本身是好的。加这条兜底后不会再卡住。
+     */
+    async function ensureToken() {
+      const t = token();
+      if (t) return t;
+      try {
+        const res = await fetch(HANDSHAKE, { method: 'GET', cache: 'no-store' });
+        if (!res.ok) return '';
+        const data = await res.json();
+        if (data && typeof data.token === 'string' && data.token) {
+          handshaken = data.token;
+          return handshaken;
+        }
+        return '';
+      } catch {
+        return '';
+      }
     }
 
     async function request(method, patch) {
@@ -44,10 +74,12 @@ window.__ModuleLoader__.load({
       const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
       let res;
+        // 口令优先取注入的全局变量，取不到就同源握手（2026-11-26）
+        const tk = await ensureToken();
       try {
         res = await fetch(API, {
           method,
-          headers: { 'x-bnn-token': token(), 'content-type': 'application/json' },
+          headers: { 'x-bnn-token': tk, 'content-type': 'application/json' },
           body: patch ? JSON.stringify({ patch }) : undefined,
           signal: ctrl ? ctrl.signal : undefined,
         });
@@ -67,7 +99,11 @@ window.__ModuleLoader__.load({
       }
       // 202 = 已提交、插件正在重启：这是成功，不是错误
       if (res.status === 202 && data && data.ok) return data;
-      if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok || data.ok === false) {
+        // 口令可能随插件重启轮换 → 清缓存，下次重新握手
+        handshaken = '';
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       return data;
     }
 
