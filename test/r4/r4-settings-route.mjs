@@ -169,7 +169,7 @@ console.log('=== 同源握手（注入失效时的兜底）');
 
   ok(typeof M2.isSameOriginPage === 'function', '导出 isSameOriginPage');
   ok(typeof M2.createHandshakeHandler === 'function', '导出 createHandshakeHandler');
-  ok(M2.HANDSHAKE_PATH === '/api/bnnbotbox/handshake', '握手路径正确');
+  ok(M2.HANDSHAKE_PATH === '/bnnbotbox/handshake', '握手路径正确');
 
   // 判定：谁能换口令
   ok(M2.isSameOriginPage({ headers: { 'sec-fetch-site': 'same-origin' } }) === true,

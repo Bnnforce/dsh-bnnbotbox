@@ -21,9 +21,9 @@ window.__ModuleLoader__.load({
 
     /** 从 index.html 注入的全局变量里取口令（见 lib/settings-route.js）。 */
     const TOKEN_GLOBAL = '__DSH_BNNBOTBOX_TOKEN__';
-    const API = '/api/bnnbotbox/config';
+    const API = '/bnnbotbox/config';
     /** 同源握手端点：HTML 注入没生效时用它换口令（2026-11-26）。 */
-    const HANDSHAKE = '/api/bnnbotbox/handshake';
+    const HANDSHAKE = '/bnnbotbox/handshake';
 
     /** 模块级握手缓存（保存会重启插件、口令轮换，失败时失效重取）。 */
     let handshaken = '';
